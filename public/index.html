@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>grill — the interviewer that doesn't believe you yet</title>
+<style>
+  /* ---- Design tokens ----
+     Subject: a high-stakes interview. The feeling is "across the table from
+     someone reading you." Palette: interrogation-room restraint — deep ink,
+     bone white, one hot amber that fires only when the interviewer is judging
+     you or speed is proven. Not the cream/serif/terracotta AI default. */
+  :root {
+    --ink: #14110f;        /* near-black, warm */
+    --slate: #2b2723;      /* panel */
+    --bone: #f3efe6;       /* text on dark */
+    --muted: #8c857a;      /* secondary text */
+    --amber: #ff7a18;      /* the tell — pressure, speed, judgment */
+    --amber-dim: #c4621a;
+    --line: #3a352f;       /* hairline */
+    --good: #6fae6f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--ink);
+    color: var(--bone);
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    padding: 22px 28px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .brand {
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+  }
+  .brand .dot { color: var(--amber); }
+  .tagline {
+    color: var(--muted);
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+  }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 0;
+    min-height: 0;
+  }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; }
+    .sidebar { border-left: none !important; border-top: 1px solid var(--line); }
+  }
+
+  /* ---- The room: transcript of the exchange ---- */
+  .room {
+    padding: 28px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .line { max-width: 70ch; }
+  .line .who {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .line.them .who { color: var(--amber); }
+  .line .text { font-size: 15.5px; line-height: 1.5; }
+  .line.you .text { color: #d8d2c6; }
+  .line.them .text { color: var(--bone); font-weight: 500; }
+
+  .empty {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 46ch;
+    margin: auto 0;
+  }
+  .empty b { color: var(--bone); font-weight: 600; }
+
+  /* ---- Sidebar: the speed proof + controls ---- */
+  .sidebar {
+    border-left: 1px solid var(--line);
+    background: var(--slate);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+  }
+  .panel-label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* The speed readout — this is the proof of the wedge. */
+  .speed .big {
+    font-size: 46px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .speed .big.fast { color: var(--amber); }
+  .speed .unit { font-size: 15px; color: var(--muted); font-weight: 400; }
+  .speed .split {
+    margin-top: 14px;
+    display: flex;
+    gap: 18px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .speed .split b {
+    display: block;
+    color: var(--bone);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+
+  /* Status dot */
+  .status { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); }
+  .status .led {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--muted); flex: none;
+    transition: background .2s, box-shadow .2s;
+  }
+  .status.listening .led { background: var(--good); box-shadow: 0 0 0 4px rgba(111,174,111,.18); }
+  .status.thinking .led { background: var(--amber); box-shadow: 0 0 0 4px rgba(255,122,24,.18); }
+  .status.speaking .led { background: var(--amber); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 7px rgba(255,122,24,0); } }
+
+  .controls { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+  .resumebox { display: flex; flex-direction: column; gap: 8px; }
+  .resumebox input[type="file"] {
+    font-family: inherit; font-size: 12px; color: var(--muted);
+    background: var(--ink); border: 1px solid var(--line);
+    border-radius: 2px; padding: 8px;
+  }
+  .resumebox input[type="file"]::file-selector-button {
+    font-family: inherit; font-size: 12px; margin-right: 8px;
+    background: var(--slate); color: var(--bone);
+    border: 1px solid var(--line); border-radius: 2px; padding: 4px 8px; cursor: pointer;
+  }
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 14px 18px;
+    border: 1px solid var(--amber);
+    background: var(--amber);
+    color: var(--ink);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background .15s, transform .05s;
+  }
+  button:hover { background: var(--amber-dim); border-color: var(--amber-dim); }
+  button:active { transform: translateY(1px); }
+  button.ghost { background: transparent; color: var(--bone); border-color: var(--line); }
+  button.talk {
+    background: var(--amber); color: var(--ink); font-weight: 600;
+    border-color: var(--amber); user-select: none; -webkit-user-select: none;
+  }
+  button.talk:disabled { opacity: 0.4; }
+  button.talk.held { background: #d33; border-color: #d33; color: #fff; }
+  button.ghost:hover { border-color: var(--muted); background: rgba(255,255,255,.03); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .err {
+    color: #ff9a6b; font-size: 12.5px; line-height: 1.5;
+    border-left: 2px solid var(--amber); padding-left: 10px;
+  }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand">grill<span class="dot">.</span></div>
+    </div>
+    <div class="tagline">the interviewer that doesn't believe you yet</div>
+  </header>
+
+  <main>
+    <section class="room" id="room">
+      <div class="empty" id="empty">
+        Hit <b>Start interview</b>. When you answer, <b>hold the amber button</b> (or hold <b>spacebar</b>) while you speak, then release. No headphones needed.
+        Speak your answers out loud — it's listening. It will push back
+        when you're vague, just like the real thing.
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="speed">
+        <div class="panel-label">response speed</div>
+        <div><span class="big" id="speedBig">—</span> <span class="unit" id="speedUnit"></span></div>
+        <div class="split">
+          <div>brain<b id="brainMs">—</b></div>
+          <div>voice<b id="voiceMs">—</b></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">status</div>
+        <div class="status" id="status"><span class="led"></span><span id="statusText">idle</span></div>
+      </div>
+
+      <div id="errBox"></div>
+
+      <div class="resumebox">
+        <div class="panel-label">resume (optional)</div>
+        <input type="file" id="resumeFile" accept=".pdf,.txt" />
+        <button id="resumeBtn" class="ghost">Upload resume</button>
+        <div class="hint" id="resumeHint"></div>
+      </div>
+
+      <div class="controls">
+        <div class="hint" id="hint">Hold the amber button (or spacebar) to talk, release to send.</div>
+        <button id="startBtn">Start interview</button>
+        <button id="talkBtn" class="talk" disabled>Hold to talk</button>
+        <button id="stopBtn" class="ghost" disabled>End</button>
+      </div>
+    </aside>
+  </main>
+
+<script>
+const room = document.getElementById("room");
+const empty = document.getElementById("empty");
+const statusEl = document.getElementById("status");
+const statusText = document.getElementById("statusText");
+const speedBig = document.getElementById("speedBig");
+const speedUnit = document.getElementById("speedUnit");
+const brainMs = document.getElementById("brainMs");
+const voiceMs = document.getElementById("voiceMs");
+const startBtn = document.getElementById("startBtn");
+const resumeBtn = document.getElementById("resumeBtn");
+const resumeFile = document.getElementById("resumeFile");
+const resumeHint = document.getElementById("resumeHint");
+const stopBtn = document.getElementById("stopBtn");
+const talkBtn = document.getElementById("talkBtn");
+const errBox = document.getElementById("errBox");
+
+let ws, audioCtx, micStream, processor, source;
+let audioQueue = [];
+let playing = false;
+
+function setStatus(state, text) {
+  statusEl.className = "status " + state;
+  statusText.textContent = text;
+}
+function showError(msg) {
+  errBox.innerHTML = '<div class="err">' + msg + '</div>';
+}
+function addLine(who, text) {
+  if (empty) empty.style.display = "none";
+  const div = document.createElement("div");
+  div.className = "line " + (who === "them" ? "them" : "you");
+  div.innerHTML = '<div class="who">' + (who === "them" ? "Interviewer" : "You") +
+                  '</div><div class="text"></div>';
+  div.querySelector(".text").textContent = text;
+  room.appendChild(div);
+  room.scrollTop = room.scrollHeight;
+}
+
+async function start() {
+  errBox.innerHTML = "";
+  startBtn.disabled = true;
+  setStatus("thinking", "connecting…");
+
+  // 1) Open WebSocket to our server.
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host);
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen = async () => {
+    // Browser no longer captures audio — the server captures the mic via ffmpeg.
+    // We just open the connection and tell the server to start the interview.
+    stopBtn.disabled = false;
+    talkBtn.disabled = false;
+    setStatus("listening", "listening");
+    ws.send(JSON.stringify({ type: "start" }));
+  };
+
+  ws.onmessage = (evt) => {
+    const m = JSON.parse(evt.data);
+    if (m.type === "interviewer_said") {
+      addLine("them", m.text);
+      setStatus("speaking", "interviewer speaking");
+    } else if (m.type === "you_said") {
+      addLine("you", m.text);
+      setStatus("thinking", "thinking…");
+    } else if (m.type === "timing") {
+      const total = (m.total_ms / 1000).toFixed(2);
+      speedBig.textContent = total;
+      speedBig.className = "big" + (m.total_ms < 1500 ? " fast" : "");
+      speedUnit.textContent = "sec to respond";
+      brainMs.textContent = m.brain_ms + "ms";
+      voiceMs.textContent = m.voice_ms + "ms";
+    } else if (m.type === "audio") {
+      enqueueAudio(m.data);
+    } else if (m.type === "error") {
+      showError(m.text);
+    }
+  };
+
+  ws.onclose = () => { setStatus("idle", "idle"); startBtn.disabled = false; stopBtn.disabled = true; talkBtn.disabled = true; };
+  ws.onerror = () => showError("Connection error. Is the server running?");
+}
+
+// Play interviewer audio (mp3 from ElevenLabs), queued so lines don't overlap.
+function enqueueAudio(b64) {
+  audioQueue.push(b64);
+  if (!playing) playNext();
+}
+function playNext() {
+  if (!audioQueue.length) {
+    playing = false;
+    setStatus("listening", "listening");
+    // Tell the server playback is fully done so it un-mutes the mic (kills echo).
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "playback_done" }));
+    return;
+  }
+  playing = true;
+  const b64 = audioQueue.shift();
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: "audio/mpeg" });
+  const audio = new Audio(URL.createObjectURL(blob));
+  audio.onended = playNext;
+  audio.play().catch(() => { playing = false; });
+}
+
+function stop() {
+  try { processor && processor.disconnect(); } catch {}
+  try { source && source.disconnect(); } catch {}
+  try { micStream && micStream.getTracks().forEach(t => t.stop()); } catch {}
+  try { audioCtx && audioCtx.close(); } catch {}
+  try { ws && ws.close(); } catch {}
+  setStatus("idle", "idle");
+  startBtn.disabled = false; stopBtn.disabled = true;
+}
+
+resumeBtn.onclick = async () => {
+  const file = resumeFile.files[0];
+  if (!file) {
+    resumeHint.textContent = "Choose a PDF or .txt file first.";
+    resumeHint.style.color = "var(--muted)";
+    return;
+  }
+  resumeHint.textContent = "Reading resume…";
+  resumeHint.style.color = "var(--muted)";
+  try {
+    const dataBase64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(",")[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const resp = await fetch("/upload-resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name, mime: file.type, dataBase64 }),
+    });
+    const out = await resp.json();
+    if (out.ok) {
+      resumeHint.textContent = `Loaded ${file.name} (${out.chars} chars). The interviewer will use it.`;
+      resumeHint.style.color = "var(--good)";
+    } else {
+      resumeHint.textContent = out.error || "Could not read that file.";
+      resumeHint.style.color = "var(--amber)";
+    }
+  } catch (e) {
+    resumeHint.textContent = "Upload failed. Try a PDF or .txt.";
+    resumeHint.style.color = "var(--amber)";
+  }
+};
+
+// ===== Push-to-talk: hold the button (or spacebar) to speak =====
+let talking = false;
+function talkStart() {
+  if (talking || talkBtn.disabled) return;
+  talking = true;
+  talkBtn.classList.add("held");
+  talkBtn.textContent = "Listening… release to send";
+  setStatus("listening", "listening");
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "talk_start" }));
+}
+function talkEnd() {
+  if (!talking) return;
+  talking = false;
+  talkBtn.classList.remove("held");
+  talkBtn.textContent = "Hold to talk";
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "talk_end" }));
+}
+talkBtn.addEventListener("mousedown", talkStart);
+talkBtn.addEventListener("mouseup", talkEnd);
+talkBtn.addEventListener("mouseleave", talkEnd);
+talkBtn.addEventListener("touchstart", (e) => { e.preventDefault(); talkStart(); });
+talkBtn.addEventListener("touchend", (e) => { e.preventDefault(); talkEnd(); });
+// Spacebar as push-to-talk (ignore when typing in the resume box)
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && !e.repeat && document.activeElement.tagName !== "TEXTAREA" && document.activeElement.tagName !== "INPUT") {
+    e.preventDefault(); talkStart();
+  }
+});
+document.addEventListener("keyup", (e) => {
+  if (e.code === "Space") { e.preventDefault(); talkEnd(); }
+});
+
+startBtn.onclick = start;
+stopBtn.onclick = stop;
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "grill",
+  "version": "0.1.0",
+  "description": "Voice-based AI mock interviewer — fast enough to interrupt, skeptical enough to feel real.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "^3.9.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pdf-parse": "^2.4.5",
+    "ws": "^8.18.0"
+  }
+}
